@@ -10,7 +10,7 @@ require Exporter;
 
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw(get_news get_news_greg_style);
-our $VERSION   = '0.02';
+our $VERSION   = '0.03';
 
 use LWP;
 use Carp;
@@ -74,7 +74,7 @@ __END__
 
 =head1 NAME
 
-WWW::Google::News
+WWW::Google::News - Access to Google's News Service (Not Usenet)
 
 =head1 SYNOPSIS
 
