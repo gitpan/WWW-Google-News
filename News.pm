@@ -9,8 +9,8 @@ use warnings;
 require Exporter;
 
 our @ISA       = qw(Exporter);
-our @EXPORT_OK = qw(get_news);
-our $VERSION   = '0.01';
+our @EXPORT_OK = qw(get_news get_news_greg_style);
+our $VERSION   = '0.02';
 
 use LWP;
 use Carp;
@@ -36,22 +36,36 @@ sub get_news {
       #print STDERR $1,"\n";
     } else {
       my @stories = split /($re2)/mi,$section;
-      my $cnt = 0;
       foreach my $story (@stories) {
-
         if ($story =~ m/$re2/mi) {
-          $cnt++;
           if (!(exists($results->{$current_section}))) {
-            $results->{$current_section} = {};
+            $results->{$current_section} = [];
           }
-          $results->{$current_section}->{$cnt}->{url} = $1;
-          $results->{$current_section}->{$cnt}->{headline} = $2;
+          my $story_h = {};
+          $story_h->{url} = $1;
+          $story_h->{headline} = $2;
+          push(@{$results->{$current_section}},$story_h);
         }
       }
     }
   }
   #print STDERR Dumper($results);
   return $results;
+}
+
+
+sub get_news_greg_style {
+  my $results = get_news();
+  my $greg_results = {};
+  foreach my $section (keys(%$results)) {
+    $greg_results->{$section} = {};
+    my $cnt = 0;
+    foreach my $story_h (@{$results->{$section}}) {
+      $cnt++;
+      $greg_results->{$section}->{$cnt} = $story_h;
+    }
+  }
+  return $greg_results;
 }
 
 1;
@@ -65,7 +79,6 @@ WWW::Google::News
 =head1 SYNOPSIS
 
   use WWW:Google::News qw(get_news);
-
   my $result = get_news();
 
 =head1 DESCRIPTION
@@ -74,34 +87,51 @@ This module provides one method get_news() which scren scrapes Google News and r
 a data structure similar to ...
 
   {
-    'Top Stories' => {
-              '1' => {
+    'Top Stories' =>
+              [
+               {
                  'url' => 'http://www.washingtonpost.com/wp-dyn/articles/A9707-2002Nov19.html',
                  'headline' => 'Amendment to Homeland Security Bill Defeated'
-              }
-              '2' => {
+               },
+               {
                  'url' => 'http://www.ananova.com/news/story/sm_712444.html',
                  'headline' => 'US and UN at odds as Iraq promises to meet deadline'
                }
-            },
-    'Entertainment' => {
-             '1' => {
+              ],
+    'Entertainment' =>
+             [
+              {
                 'url' => 'http://abcnews.go.com/sections/entertainment/DailyNews/Coburn021119.html',
                 'headline' => 'James Coburn Dies'
               },
-             '2' => {
+              {
                 'url' => 'http://www.cbsnews.com/stories/2002/11/15/entertainment/main529532.shtml',
                 'headline' => '007s On Parade At \'Die\' Premiere'
               }
-           },
+             ]
    }
 
-Which is a reference to a hash keyed on News Section, which points to hashes keyed on Story Number,
-which points finally to a hash keyed on URL and Headline.
+Which is a reference to a hash keyed on News Section, which points to
+an array of hashes keyed on URL and Headline.
+
+It also provides a method called get_news_greg_style() which returns the same data, only
+using a hash keyed on story number instead of the array described in the above.
+
+=head1 TODO
+
+* Implement an example RSS feed.
+
+* Seek out a good psychologist so we can work through my obsession
+  with hashes.
 
 =head1 AUTHOR
 
 Greg McCarroll <greg@mccarroll.demon.co.uk>
+
+=head1 KUDOS
+
+Leon Brocard for pulling me up on my obsessive compulsion to use hashes. Anyone who fancies implementing
+an RSS feed using this so I can put it in an examples directory.
 
 =head1 SEE ALSO
 
