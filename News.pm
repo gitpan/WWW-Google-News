@@ -7,7 +7,7 @@ require Exporter;
 
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw(get_news get_news_greg_style get_news_for_topic);
-our $VERSION   = '0.06';
+our $VERSION   = '0.07';
 
 use Carp;
 use LWP;

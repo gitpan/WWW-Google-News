@@ -22,13 +22,17 @@ HISTORY / AUTHORS
 
 v0.05 
 
-Bowen Dwelle added get_news_for_topic 
++ Bowen Dwelle added get_news_for_topic()
++ get_news() and get_news_greg_style() should be considered deprecated, 
+since they don't really do anything interesting. 
 
-v0.04 - The original author is Greg McCarroll. 
+v0.04 
+
++ The original author is Greg McCarroll. 
+
+COPYRIGHT AND LICENSE
 
 Please report any bugs/suggestions to Bowen Dwelle <bowen@dwelle.org>
-
-COPYRIGHT AND LICENCE
 
 This program is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself.
