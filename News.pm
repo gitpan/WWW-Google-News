@@ -1,6 +1,5 @@
 package WWW::Google::News;
 
-use 5.006;
 use strict;
 use warnings;
 
@@ -10,7 +9,7 @@ require Exporter;
 
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw(get_news get_news_greg_style);
-our $VERSION   = '0.03';
+our $VERSION   = '0.04';
 
 use LWP;
 use Carp;
@@ -130,8 +129,10 @@ Greg McCarroll <greg@mccarroll.demon.co.uk>
 
 =head1 KUDOS
 
-Leon Brocard for pulling me up on my obsessive compulsion to use hashes. Anyone who fancies implementing
-an RSS feed using this so I can put it in an examples directory.
+Darren Chamberlain for rss_alternate.pl
+
+Leon Brocard for pulling me up on my obsessive compulsion to use
+hashes.
 
 =head1 SEE ALSO
 
