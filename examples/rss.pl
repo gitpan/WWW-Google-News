@@ -27,6 +27,6 @@ for (@{$news->{$topic}}) {
                 );
 }
 
-print "Content-type:text/plain\n\n";
+#print "Content-type:text/plain\n\n";
 print $rss->as_string, "\n";
 
