@@ -3,16 +3,15 @@ package WWW::Google::News;
 use strict;
 use warnings;
 
-#use Data::Dumper;
-
 require Exporter;
 
 our @ISA       = qw(Exporter);
-our @EXPORT_OK = qw(get_news get_news_greg_style);
-our $VERSION   = '0.04';
+our @EXPORT_OK = qw(get_news get_news_greg_style get_news_for_topic);
+our $VERSION   = '0.06';
 
-use LWP;
 use Carp;
+use LWP;
+use URI::Escape;
 
 sub get_news {
   my $url = 'http://news.google.com/news/gnmainlite.html';
@@ -67,6 +66,54 @@ sub get_news_greg_style {
   return $greg_results;
 }
 
+sub get_news_for_topic {
+
+	my $topic = uri_escape( $_[0] );
+
+	my @results = ();
+	my $url = "http://news.google.com/news?hl=en&edition=us&q=$topic";
+	my $ua = LWP::UserAgent->new();
+	$ua->agent('Mozilla/5.0');
+
+	my $response = $ua->get($url);
+	return unless $response->is_success;
+
+	my $re1 = '<br><div>(.+)<.*br></div>';
+	my $re2 =  '<a href=(.*?)>(.*?)</a><br><font size=[^>]+><font color=[^>]+>([^<]*?)</font>([^<]*?)</font><br><font size=[^>]+>\s*<b>...</b>\s*(.*?)</font>';
+
+	my( $section ) = ( $response->content =~ m/$re1/s );
+	$section =~ s/\n//g;
+	my @stories = split /($re2)/mi,$section;
+
+	foreach my $story (@stories) {
+		if ($story =~ m/$re2/i) {
+			my $story_h = {};
+                
+			my( $url, $headline, $source, $date, $summary ) = ( $1, $2, $3, $4, $5 );
+			$source =~ s/&nbsp;/ /g;
+			$source =~ s/\s+/ /g;
+			$date =~ s/&nbsp;/ /g;
+			$date =~ s/\s+/ /g;
+			$date =~ s/-//g;
+			#$summary = $hs->parse($summary); $hs->eof;
+			$summary =~ s#<br># #gi;
+			$summary =~ s#<.+?>##gi;
+        
+			$story_h->{url} = $url;
+			$story_h->{headline} = $headline;
+			$story_h->{source} = $source;
+			$story_h->{date} = $date;
+			$story_h->{description} = "$source: $summary";
+
+			push(@results,$story_h);
+
+		}
+	}
+
+	return \@results;
+
+}
+
 1;
 
 __END__
@@ -78,12 +125,14 @@ WWW::Google::News - Access to Google's News Service (Not Usenet)
 =head1 SYNOPSIS
 
   use WWW:Google::News qw(get_news);
-  my $result = get_news();
+  my $results = get_news();
+  
+  my $results = get_news_for_topic('impending asteriod impact');
 
 =head1 DESCRIPTION
 
-This module provides one method get_news() which scren scrapes Google News and returns
-a data structure similar to ...
+This module provides a couple of methods to scrape results from Google News, returning 
+a data structure similar to the following (which happens to be suitable to feeding into XML::RSS).
 
   {
     'Top Stories' =>
@@ -110,22 +159,51 @@ a data structure similar to ...
              ]
    }
 
-Which is a reference to a hash keyed on News Section, which points to
-an array of hashes keyed on URL and Headline.
+=head1 METHODS
+
+=over 4
+
+=item get_news()
+
+Scrapes L<http://news.google.com/news/gnmainlite.html> and returns a reference 
+to a hash keyed on News Section, which points to an array of hashes keyed on URL and Headline.
+
+=item get_news_for_topic( $topic )
+
+Queries L<http://news.google.com/news> for results on a particular topic, 
+and returns a pointer to an array of hashes containing result data. 
+
+An RSS feed can be constructed from this very easily:
+
+	use WWW::Google::News;
+	use XML::RSS;
+
+	$results = get_news_for_topic( $topic )
+	my $rss = XML::RSS->new;
+	$rss->channel(title => "Google News -- $topic");
+	for (@{$news}) {
+                $rss->add_item(
+                        title => $_->{headline},
+                        link  => $_->{url},
+                        description  => $_->{description},
+                );
+        }
+        print $rss->as_string;
+
+=item get_news_greg_style()
 
 It also provides a method called get_news_greg_style() which returns the same data, only
 using a hash keyed on story number instead of the array described in the above.
 
 =head1 TODO
 
-* Implement an example RSS feed.
+* Implement an example RSS feed. -- Done, see above
 
-* Seek out a good psychologist so we can work through my obsession
-  with hashes.
+* Seek out a good psychologist so we can work through Greg's obsession with hashes.
 
-=head1 AUTHOR
+=head1 AUTHORS
 
-Greg McCarroll <greg@mccarroll.demon.co.uk>
+Greg McCarroll <greg@mccarroll.demon.co.uk>, Bowen Dwelle <bowen@dwelle.org>
 
 =head1 KUDOS
 
@@ -136,6 +214,7 @@ hashes.
 
 =head1 SEE ALSO
 
-L<http://http://news.google.com/news/gnmainlite.html>
+L<http://news.google.com/>
+L<http://news.google.com/news/gnmainlite.html>
 
 =cut
