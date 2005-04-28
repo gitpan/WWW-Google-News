@@ -20,6 +20,9 @@ TODO
 
 HISTORY / AUTHORS
 
+v0.08
++ Scott Holdren updated regexes for get_news_for_topic()
+
 v0.05 
 
 + Bowen Dwelle added get_news_for_topic()
