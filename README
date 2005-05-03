@@ -20,8 +20,12 @@ TODO
 
 HISTORY / AUTHORS
 
-v0.08
-+ Scott Holdren updated regexes for get_news_for_topic()
+v0.09
+
++ update regexes for new html layout
++ fix sample script for get_news_for_topic()
++ add summary property to get_news_for_topic()
++ clean up output from get_news_for_topic()
 
 v0.05 
 

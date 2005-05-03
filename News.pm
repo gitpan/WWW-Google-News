@@ -7,29 +7,28 @@ require Exporter;
 
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw(get_news get_news_greg_style get_news_for_topic);
-our $VERSION   = '0.07';
+our $VERSION   = '0.09';
 
 use Carp;
 use LWP;
 use URI::Escape;
 
 sub get_news {
-  my $url = 'http://news.google.com/news/gnmainlite.html';
+	my $url = 'http://news.google.com/news/gnmainlite.html';
   my $ua = LWP::UserAgent->new;
+	$ua->agent('Mozilla/5.0');
   my $response = $ua->get($url);
+  return unless $response->is_success;
+	my $content = $response->content;
   my $results = {};
 
-  return unless $response->is_success;
+  my $re1 =  '<TD bgcolor=#efefef class=ks[^>]*>&nbsp;(.*?)&nbsp;</TD>';
+	my $re2 =  '</table><a href="?([^">]+)"?[^>]*>(.+?)</a><br><font size=[^>]+><font color=[^>]+>(.*?)</font>(.*?)</font><br><font size=[^>]+>(.+?)\s*<b>...</b>\s*</font>';
 
-  #print STDERR "\n",length($response->content)," bytes \n";
-
-  my $re1 =  '<TD nowrap bgcolor=#efefef>\s*<B>&nbsp;(.*?)</B>\s*</TD>';
-  my $re2 =  '<BR>\s*<a class=y href="(.*?)">(.*?)</a><BR>';
-
-  my @sections = split /($re1)/m,$response->content;
+  my @sections = split /($re1)/im,$content;
   my $current_section = '';
   foreach my $section (@sections) {
-    if ($section =~ m/$re1/m) {
+    if ($section =~ m/$re1/im) {
       $current_section = $1;
       #print STDERR $1,"\n";
     } else {
@@ -40,8 +39,20 @@ sub get_news {
             $results->{$current_section} = [];
           }
           my $story_h = {};
-          $story_h->{url} = $1;
-          $story_h->{headline} = $2;
+          my( $url, $headline, $source, $date, $summary ) = ( $1, $2, $3, $4, $5 );
+
+          _clean_string($source);
+          _clean_string($headline);
+          _clean_string($date);
+          _clean_string($summary);
+
+          $story_h->{url} = $url;
+          $story_h->{headline} = $headline;
+          $story_h->{source} = $source;
+          $story_h->{date} = $date;
+          $story_h->{description} = "$source: $summary";
+          $story_h->{summary} = $summary;
+
           push(@{$results->{$current_section}},$story_h);
         }
       }
@@ -72,38 +83,34 @@ sub get_news_for_topic {
 
 	my @results = ();
 	my $url = "http://news.google.com/news?hl=en&edition=us&q=$topic";
+
 	my $ua = LWP::UserAgent->new();
 	$ua->agent('Mozilla/5.0');
-
 	my $response = $ua->get($url);
 	return unless $response->is_success;
+	my $content = $response->content;
+	my $re1 = '<br><div><table[^>]+>(.+)</table></div><[^>]*br>';
+	my $re2 =  '<td valign=top><a href="?([^">]+)"?[^>]*>(.+?)</a><br><font size=[^>]+><font color=[^>]+>([^<]*?)</font>(.*?)</font><br><font size=[^>]+>(.+?)\s*<b>...</b>\s*</font>';
 
-	my $re1 = '<br><div>(.+)<.*br></div>';
-	my $re2 =  '<a href=(.*?)>(.*?)</a><br><font size=[^>]+><font color=[^>]+>([^<]*?)</font>([^<]*?)</font><br><font size=[^>]+>\s*<b>...</b>\s*(.*?)</font>';
-
-	my( $section ) = ( $response->content =~ m/$re1/s );
+	my( $section ) = ( $content =~ m/$re1/s );
 	$section =~ s/\n//g;
 	my @stories = split /($re2)/mi,$section;
-
 	foreach my $story (@stories) {
 		if ($story =~ m/$re2/i) {
 			my $story_h = {};
-                
 			my( $url, $headline, $source, $date, $summary ) = ( $1, $2, $3, $4, $5 );
-			$source =~ s/&nbsp;/ /g;
-			$source =~ s/\s+/ /g;
-			$date =~ s/&nbsp;/ /g;
-			$date =~ s/\s+/ /g;
-			$date =~ s/-//g;
-			#$summary = $hs->parse($summary); $hs->eof;
-			$summary =~ s#<br># #gi;
-			$summary =~ s#<.+?>##gi;
-        
+
+			_clean_string($source);
+			_clean_string($headline);
+			_clean_string($date);
+			_clean_string($summary);
+
 			$story_h->{url} = $url;
 			$story_h->{headline} = $headline;
 			$story_h->{source} = $source;
 			$story_h->{date} = $date;
 			$story_h->{description} = "$source: $summary";
+			$story_h->{summary} = $summary;
 
 			push(@results,$story_h);
 
@@ -112,6 +119,17 @@ sub get_news_for_topic {
 
 	return \@results;
 
+}
+
+sub _clean_string {
+	$_[0] =~ s/&nbsp;/ /ig;
+	$_[0] =~ s/&quot;/"/ig;
+	$_[0] =~ s/&amp;/&/ig;
+	$_[0] =~ s/&#39;/'/g;
+	$_[0] =~ s/<br>/ /ig;
+	$_[0] =~ s/<[^>]+>//g;
+	$_[0] =~ s/\s*-?\s*$//;
+	$_[0] =~ s/^\s+//;
 }
 
 1;
@@ -166,26 +184,41 @@ a data structure similar to the following (which happens to be suitable to feedi
 =item get_news()
 
 Scrapes L<http://news.google.com/news/gnmainlite.html> and returns a reference 
-to a hash keyed on News Section, which points to an array of hashes keyed on URL and Headline.
+to a hash keyed on News Section, which points to an array of hashes keyed on URL , Headline, etc.
+
+  use WWW::Google::News (get_news);
+
+  my $news = get_news();
+  foreach my $topic (keys %{$news}) {
+    for (@{$news->{$topic}}) {
+      print "Topic: $topic\n";
+      print "Headline: " . $_->{headline} . "\n";
+      print "URL: " . $_->{url} . "\n";
+      print "Source: " . $_->{source} . "\n";
+      print "When: " . $_->{date} . "\n";
+      print "Summary: " . $_->{summary} . "\n";
+      print "\n";
+    }
+  }
 
 =item get_news_for_topic( $topic )
 
 Queries L<http://news.google.com/news> for results on a particular topic, 
-and returns a pointer to an array of hashes containing result data. 
+and returns a pointer to an array of hashes containing result data, similar to get_news()
 
 An RSS feed can be constructed from this very easily:
 
 	use WWW::Google::News;
 	use XML::RSS;
 
-	$results = get_news_for_topic( $topic )
+	$news = get_news_for_topic( $topic )
 	my $rss = XML::RSS->new;
 	$rss->channel(title => "Google News -- $topic");
 	for (@{$news}) {
                 $rss->add_item(
                         title => $_->{headline},
                         link  => $_->{url},
-                        description  => $_->{description},
+                        description  => $_->{description}, # source + summary
                 );
         }
         print $rss->as_string;
