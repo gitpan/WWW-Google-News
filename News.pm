@@ -1,3 +1,4 @@
+
 package WWW::Google::News;
 
 use strict;
@@ -7,11 +8,68 @@ require Exporter;
 
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw(get_news get_news_greg_style get_news_for_topic);
-our $VERSION   = '0.09';
+our $VERSION   = '0.10';
 
 use Carp;
 use LWP;
 use URI::Escape;
+
+sub new {
+	my $pkg = shift;
+	my $self = {};
+	bless $self, $pkg;
+	if (! $self->init(@_)) {
+		return undef;
+	}
+	return $self;
+}
+
+sub init {
+	my $self = shift;
+	my $args = (ref($_[0]) eq "HASH") ? shift : {@_};
+	$self->{'_topic'} = $args->{'topic'};
+	$self->{'_start_date'} = $args->{'start_date'};
+	$self->{'_end_date'} = $args->{'end_date'};
+	$self->{'_sort'} = $args->{'sort'};
+	$self->{'_max'} = $args->{'max'} || 20;
+	
+	return 1;
+}
+
+sub topic {
+	my $self = shift;
+	$self->{'_topic'} = shift;
+	return $self->{'_topic'};
+}
+
+sub start_date {
+  my $self = shift;
+  $self->{'_start_date'} = shift;
+	return $self->{'_start_date'};
+}
+
+sub end_date {
+  my $self = shift;
+  $self->{'_end_date'} = shift;
+	return $self->{'_end_date'};
+}
+
+sub sort {
+  my $self = shift;
+  $self->{'_sort'} = shift;
+	return $self->{'_sort'};
+}
+
+sub max {
+  my $self = shift;
+  $self->{'_max'} = shift;
+	return $self->{'_max'};
+}
+
+sub search {
+	my $self = shift;
+	return get_news_for_topic($self->{'_topic'},$self->{'_start_date'},$self->{'_end_date'},$self->{'_sort'},$self->{'_max'});
+}
 
 sub get_news {
 	my $url = 'http://news.google.com/news/gnmainlite.html';
@@ -80,43 +138,105 @@ sub get_news_greg_style {
 sub get_news_for_topic {
 
 	my $topic = uri_escape( $_[0] );
+	my $start_date = $_[1] || "";
+	my $end_date = $_[2] || "";
+	my $sort= $_[3] || "";
+	my $max = $_[4] || 20;
 
-	my @results = ();
 	my $url = "http://news.google.com/news?hl=en&edition=us&q=$topic";
-
-	my $ua = LWP::UserAgent->new();
-	$ua->agent('Mozilla/5.0');
-	my $response = $ua->get($url);
-	return unless $response->is_success;
-	my $content = $response->content;
-	my $re1 = '<br><div><table[^>]+>(.+)</table></div><[^>]*br>';
-	my $re2 =  '<td valign=top><a href="?([^">]+)"?[^>]*>(.+?)</a><br><font size=[^>]+><font color=[^>]+>([^<]*?)</font>(.*?)</font><br><font size=[^>]+>(.+?)\s*<b>...</b>\s*</font>';
-
-	my( $section ) = ( $content =~ m/$re1/s );
-	$section =~ s/\n//g;
-	my @stories = split /($re2)/mi,$section;
-	foreach my $story (@stories) {
-		if ($story =~ m/$re2/i) {
-			my $story_h = {};
-			my( $url, $headline, $source, $date, $summary ) = ( $1, $2, $3, $4, $5 );
-
-			_clean_string($source);
-			_clean_string($headline);
-			_clean_string($date);
-			_clean_string($summary);
-
-			$story_h->{url} = $url;
-			$story_h->{headline} = $headline;
-			$story_h->{source} = $source;
-			$story_h->{date} = $date;
-			$story_h->{description} = "$source: $summary";
-			$story_h->{summary} = $summary;
-
-			push(@results,$story_h);
-
-		}
+	my $url_start;
+	my $url_end;
+	if ($start_date =~ /(^|-)(\d{1,2})-(\d{1,2})$/) {
+		$url_start = "&as_mind=$3&as_minm=$2";
+	}
+  if ($end_date =~ /(^|-)(\d{1,2})-(\d{1,2})$/) {
+    $url_end = "&as_maxd=$3&as_maxm=$2";
+  }
+	if ($url_start && $url_end) {
+		$url .= "&as_drrb=b" . $url_start . $url_end;
 	}
 
+	if (lc($sort) eq "date" || ($sort eq "" && $url_start && $url_end)) {
+		$url .= "&scoring=d";
+	}
+
+	my @results = ();
+
+	my %URL;
+	$URL{"0"} = 1;
+	my $flag = 1;
+
+	my $page_size = 100;
+
+	if ($max <= 0) {
+		$page_size = 100;
+	} elsif ($max <= 50) {
+		$page_size = 50;
+	} elsif ($max <= 20) {
+		$page_size = 20;
+	}
+
+MAIN: while(1) {
+	$flag = 0;
+  foreach my $u (sort {$a<=>$b} keys %URL) {
+    next unless $URL{$u};
+
+    $flag = 1;
+
+		my $ua = LWP::UserAgent->new();
+		my $request = HTTP::Request->new(GET => $url."&start=$u");
+		$request->header("Cookie","PREF=ID=3559860f31fac0d3:LD=en:NR=$page_size:TM=1109341032:LM=1113500592:GM=1:S=gRr8PQTzjZ9uhb-z; domain=.google.com; expires=Sun, Jan 17, 2038 1:14:20 PM; path=/");
+		$ua->timeout(30);	
+		$ua->agent('Mozilla/5.0');
+		my $response = $ua->request($request);
+		return unless $response->is_success;
+		my $content = $response->content;
+
+	  if (!$content) {
+	    sleep 5; next;
+	  }
+	  $URL{$u} = 0;
+
+		my $re1 = '<br><div><table[^>]+>(.+)</table></div><[^>]*br>';
+		my $re2 =  '<td valign=top><a href="?([^">]+)"?[^>]*>(.+?)</a><br><font size=[^>]+><font color=[^>]+>([^<]*?)</font>(.*?)</font><br><font size=[^>]+>(.+?)\s*<b>...</b>\s*</font>';
+
+	  my @page_links = split /(\&start=\d+>)/mi,$content;
+	  foreach my $pl (@page_links) {
+	    if ($pl =~ /\&start=(\d+)>/) {
+	      if (!exists($URL{$1})) {
+	        $URL{$1} = 1;
+	      }
+	    }
+	  }
+
+		my( $section ) = ( $content =~ m/$re1/s );
+		$section =~ s/\n//g;
+		my @stories = split /($re2)/mi,$section;
+		foreach my $story (@stories) {
+			if ($story =~ m/$re2/i) {
+				my $story_h = {};
+				my( $url, $headline, $source, $date, $summary ) = ( $1, $2, $3, $4, $5 );
+
+				_clean_string($source);
+				_clean_string($headline);
+				_clean_string($date);
+				_clean_string($summary);
+	
+				$story_h->{url} = $url;
+				$story_h->{headline} = $headline;
+				$story_h->{source} = $source;
+				$story_h->{date} = $date;
+				$story_h->{description} = "$source: $summary";
+				$story_h->{summary} = $summary;
+
+				push(@results,$story_h);
+				last MAIN if $max>0 && scalar(@results)>=$max;
+			}
+		}
+	}
+	
+	last MAIN unless $flag;
+}
 	return \@results;
 
 }
@@ -142,11 +262,21 @@ WWW::Google::News - Access to Google's News Service (Not Usenet)
 
 =head1 SYNOPSIS
 
-  use WWW:Google::News qw(get_news);
-  my $results = get_news();
-  
-  my $results = get_news_for_topic('impending asteriod impact');
+	# OO search interface
 
+	use WWW::Google::News;
+
+	my $news = WWW::Google::News->new();
+	$news->topic("Frank Zappa");
+	my $results = $news->search();
+
+	# original news functions
+
+	use WWW:Google::News qw(get_news);
+	my $results = get_news();
+  
+	my $results = get_news_for_topic('impending asteriod impact');
+	
 =head1 DESCRIPTION
 
 This module provides a couple of methods to scrape results from Google News, returning 
@@ -181,6 +311,31 @@ a data structure similar to the following (which happens to be suitable to feedi
 
 =over 4
 
+=item search()
+
+Perform search on Google News.  Options for search term (topic), sort, date range, and maximum results.  Scraper will maximize results per page, and will page through results until it gets enough stories.  Internally uses get_news_for_topic().
+
+	use WWW::Google::News;
+
+	my $news = WWW::Google::News->new();
+
+	# these methods will get or set their values
+	$news->topic("Frank Zappa"); # search term
+	$news->sort("date"); # relevance or date, relevance is default
+	$news->start_date("2005-04-20"); # must provide start and end date,
+	$news->end_date("2005-04-20");   # changes default sort to date
+	$news->max(2); # max stories, default 20.  -1 => all stories.
+
+	my $results = $news->search();
+	foreach (@{$results}) {
+	  print "Source: " . $_->{source} . "\n";
+	  print "Date: " . $_->{date} . "\n";
+	  print "URL: " . $_->{url} . "\n";
+	  print "Summary: " . $_->{summary} . "\n";
+	  print "Headline: " . $_->{headline} . "\n";
+	  print "\n";
+	}
+
 =item get_news()
 
 Scrapes L<http://news.google.com/news/gnmainlite.html> and returns a reference 
@@ -211,7 +366,9 @@ An RSS feed can be constructed from this very easily:
 	use WWW::Google::News;
 	use XML::RSS;
 
-	$news = get_news_for_topic( $topic )
+	$news = get_news_for_topic( $topic );
+	# also supports the same options for search()
+	# $news = get_news_for_topic( $topic, $start_date, $end_date, $sort, $max );
 	my $rss = XML::RSS->new;
 	$rss->channel(title => "Google News -- $topic");
 	for (@{$news}) {
@@ -230,13 +387,15 @@ using a hash keyed on story number instead of the array described in the above.
 
 =head1 TODO
 
-* Implement an example RSS feed. -- Done, see above
+Return info on images contained in certain articles.
 
-* Seek out a good psychologist so we can work through Greg's obsession with hashes.
+Parse out sub articles from featured stories.
+
+Consolidate scraping functions.
 
 =head1 AUTHORS
 
-Greg McCarroll <greg@mccarroll.demon.co.uk>, Bowen Dwelle <bowen@dwelle.org>
+Greg McCarroll <greg@mccarroll.demon.co.uk>, Bowen Dwelle <bowen@dwelle.org>, Scott Holdren <scott@sitening.com>
 
 =head1 KUDOS
 
@@ -251,3 +410,4 @@ L<http://news.google.com/>
 L<http://news.google.com/news/gnmainlite.html>
 
 =cut
+

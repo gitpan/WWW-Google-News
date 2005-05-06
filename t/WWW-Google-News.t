@@ -1,10 +1,18 @@
 #!perl
 use strict;
-use Test::More tests => 5;
+use Test::More tests => 6;
 
 BEGIN { use_ok('WWW::Google::News',qw(get_news_for_topic get_news get_news_greg_style)); }
 
 my $results;
+
+
+my $news = WWW::Google::News->new();
+$news->topic("Frank Zappa");
+$news->max(2);
+$results = $news->search();
+
+ok(defined($results),'OO: At least we got something');
 
 $results = get_news_greg_style();
 
