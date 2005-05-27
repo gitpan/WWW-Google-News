@@ -8,7 +8,7 @@ require Exporter;
 
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw(get_news get_news_greg_style get_news_for_topic);
-our $VERSION   = '0.10';
+our $VERSION   = '0.11';
 
 use Carp;
 use LWP;
@@ -195,9 +195,10 @@ MAIN: while(1) {
 	  if (!$content) {
 	    sleep 5; next;
 	  }
+
 	  $URL{$u} = 0;
 
-		my $re1 = '<br><div><table[^>]+>(.+)</table></div><[^>]*br>';
+		my $re1 = '<br><div[^>]*><table[^>]+>(.+)<br></table><p style=';
 		my $re2 =  '<td valign=top><a href="?([^">]+)"?[^>]*>(.+?)</a><br><font size=[^>]+><font color=[^>]+>([^<]*?)</font>(.*?)</font><br><font size=[^>]+>(.+?)\s*<b>...</b>\s*</font>';
 
 	  my @page_links = split /(\&start=\d+>)/mi,$content;
@@ -208,8 +209,7 @@ MAIN: while(1) {
 	      }
 	    }
 	  }
-
-		my( $section ) = ( $content =~ m/$re1/s );
+		my( $section ) = ( $content =~ m/$re1/s ) or next;
 		$section =~ s/\n//g;
 		my @stories = split /($re2)/mi,$section;
 		foreach my $story (@stories) {
