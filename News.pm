@@ -8,7 +8,7 @@ require Exporter;
 
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw(get_news get_news_greg_style get_news_for_topic);
-our $VERSION   = '0.11';
+our $VERSION   = '0.12';
 
 use Carp;
 use LWP;
@@ -176,7 +176,32 @@ sub get_news_for_topic {
 		$page_size = 20;
 	}
 
-MAIN: while(1) {
+	use XML::Atom::Client;
+	my $api = XML::Atom::Client->new;
+	my $feed = $api->getFeed($url."&output=atom");
+	my @entries = $feed->entries;
+	foreach my $e (@entries) {
+	  my $headline = $e->title();
+		my $source = "";
+		if ($headline =~ s/ - (.+)$//) {
+			$source = $1;
+		}
+		my $date = $e->issued();
+		my $summary = $e->content()->body();
+		_clean_string($summary);
+		$summary =~ s/^.+? \.\.\. //;
+		$summary =~ s/ \.\.\..*?$//;
+		my $story_h;
+    $story_h->{url} = $e->link()->href();
+    $story_h->{headline} = $headline;
+    $story_h->{source} = $source;
+    $story_h->{date} = $date;
+    $story_h->{description} = "$source: $summary";
+    $story_h->{summary} = $summary;   
+		push(@results,$story_h);
+ 	}   
+
+MAIN: while(0) {
 	$flag = 0;
   foreach my $u (sort {$a<=>$b} keys %URL) {
     next unless $URL{$u};
@@ -198,7 +223,7 @@ MAIN: while(1) {
 
 	  $URL{$u} = 0;
 
-		my $re1 = '<br><div[^>]*><table[^>]+>(.+)<br></table><p style=';
+		my $re1 = '<br><div[^>]*><table[^>]+>(.+)</table><p style=';
 		my $re2 =  '<td valign=top><a href="?([^">]+)"?[^>]*>(.+?)</a><br><font size=[^>]+><font color=[^>]+>([^<]*?)</font>(.*?)</font><br><font size=[^>]+>(.+?)\s*<b>...</b>\s*</font>';
 
 	  my @page_links = split /(\&start=\d+>)/mi,$content;
